@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime, timedelta
-
 from telegram import (
     Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup,
     ChatMemberUpdated, ChatMember
@@ -13,7 +12,7 @@ from telegram.ext import (
 
 # ====================== КОНФИГ ======================
 TOKEN = "8660358537:AAGzxAODIeLfN3N5SmV0uL1cs5eUUhYosn8"
-CHANNEL_ID = -1001234567890  # ID канала https://t.me/koefii
+CHANNEL_ID = -1001234567890
 ADMIN_PASSWORD = "12345"
 
 users = {}          # user_id -> данные
@@ -50,9 +49,9 @@ FLAGS = {
 REGIONS = list(FLAGS.keys())
 
 # ====================== БАННЕР ======================
-BANNER_URL = "https://ibb.co/6J6ZJ6Z"  # временный URL. Замени на свой после первого запуска
+BANNER_URL = "https://ibb.co/6J6ZJ6Z"
 
-# ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
+# ====================== ВСПОМОГАТЕЛЬНЫЕ ======================
 def is_subscribed(update: Update) -> bool:
     try:
         member = update.get_bot().get_chat_member(CHANNEL_ID, update.effective_user.id)
@@ -74,38 +73,36 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_subscription(update, context):
         return
-
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=BANNER_URL,
         caption=(
-            "Доброго время суток и имя пользователя!\n\n"
-            "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, "
-            "статистику по таймам, тренды и много другое). Анализирую и предоставляю наиболее вероятные исходы на событие."
+            "Доброго времени суток!\n\n"
+            "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, "
+            "xG, статистика по таймам, тренды и многое другое). Анализирую и даю наиболее вероятные исходы."
         ),
         parse_mode=ParseMode.MARKDOWN
     )
-
     keyboard = [
         [InlineKeyboardButton("🏠 Аккаунт", callback_data="menu_account")],
         [InlineKeyboardButton("⚽ Матчи", callback_data="menu_matches")],
         [InlineKeyboardButton("📢 Канал", callback_data="menu_channel"),
          InlineKeyboardButton("💬 Чат", callback_data="menu_chat")],
     ]
-    reply = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Главное меню", reply_markup=reply)
+    await update.message.reply_text("Главное меню", reply_markup=InlineKeyboardMarkup(keyboard))
 
 # ====================== ОБРАБОТКА КЛАВИШ ======================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data
 
     if data == "menu_channel":
         await query.edit_message_text("Канал:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти", url="https://t.me/koefii")]]))
+
     elif data == "menu_chat":
         await query.edit_message_text("Чат:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти", url="https://t.me/koefchat")]]))
+
     elif data == "menu_account":
         user_id = query.from_user.id
         user = users.get(user_id, {"name": query.from_user.first_name, "status": "Free", "premium_end": None})
@@ -115,20 +112,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton("Купить Premium", callback_data="buy_premium")])
         keyboard.append([InlineKeyboardButton("Поддержка", callback_data="support")])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data == "menu_matches":
         keyboard = [[InlineKeyboardButton(region, callback_data=f"region_{region}")] for region in REGIONS]
         await query.edit_message_text("Выбери регион:", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data.startswith("region_"):
         region = data.split("_")[1]
         context.user_data["region"] = region
         keyboard = [[InlineKeyboardButton(FLAGS[region][0], callback_data=f"league_{region}")] for region in REGIONS]
         await query.edit_message_text(f"Выбери лигу для {region}:", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data.startswith("league_"):
         region = data.split("_")[1]
         context.user_data["league"] = region
         await query.edit_message_text("Матчи добавлены (симуляция)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_matches")]]))
+
     elif data.startswith("match_"):
         match_id = int(data.split("_")[1])
+        context.user_data["match_id"] = match_id
         match = matches.get(match_id, {"name": "Матч", "forecast": "Прогноз...", "xg": "2.4", "injuries": "Нет травм", "stats": "Статистика..."})
         keyboard = [
             [InlineKeyboardButton("Прогноз", callback_data=f"tab_Прогноз_{match_id}")],
@@ -138,6 +140,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Травмы", callback_data=f"tab_Травмы_{match_id}")],
         ]
         await query.edit_message_text(f"Матч: {match['name']}\n\nВыбери вкладку:", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data.startswith("tab_"):
         tab = data.split("_")[1]
         match_id = int(data.split("_")[2])
@@ -150,6 +153,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Травмы": f"**Травмы:** {match.get('injuries', 'Нет травм')}",
         }
         await query.edit_message_text(spoilers.get(tab, "Данные недоступны"), parse_mode=ParseMode.MARKDOWN)
+
     elif data == "buy_premium":
         keyboard = [
             [InlineKeyboardButton("Купить на месяц (300 руб)", callback_data="premium_month")],
@@ -157,13 +161,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Назад", callback_data="menu_account")],
         ]
         await query.edit_message_text("Выбери тариф Premium:", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data == "premium_month":
         await query.edit_message_text("💰 Оплата Premium на месяц: 300 руб.\n\nПосле оплаты напиши мне @код_поддержки", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_account")]]))
+
     elif data == "premium_3month":
         await query.edit_message_text("💰 Оплата Premium на 3 месяца: 800 руб.\n\nПосле оплаты напиши мне @код_поддержки", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_account")]]))
+
     elif data == "support":
         if unread_support:
-            text = f"У тебя {len(unread_support)} непрочитанных сообщений.\n\nНажми на любое сообщение, чтобы прочитать:"
+            text = f"У тебя {len(unread_support)} непрочитанных сообщений.\n\nНажми на сообщение, чтобы прочитать:"
             for i, msg in enumerate(unread_support):
                 text += f"\n\n{i+1}. {msg['user_name']} (ID: {msg['user_id']})"
             keyboard = [[InlineKeyboardButton(f"Сообщение {i+1}", callback_data=f"support_msg_{i}")] for i in range(len(unread_support))]
@@ -171,22 +178,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
         else:
             await query.edit_message_text("Непрочитанных сообщений нет.")
+
     elif data.startswith("support_msg_"):
         idx = int(data.split("_")[2])
-        msg = unread_support.pop(idx)
-        keyboard = [
-            [InlineKeyboardButton("Ответить", callback_data="answer_support")],
-            [InlineKeyboardButton("Назад", callback_data="support")],
-        ]
-        await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
+        if idx < len(unread_support):
+            msg = unread_support.pop(idx)
+            keyboard = [
+                [InlineKeyboardButton("Ответить", callback_data="answer_support")],
+                [InlineKeyboardButton("Назад", callback_data="support")],
+            ]
+            await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data == "answer_support":
-        await query.edit_message_text("Ответ отправлен (симуляция)")
+        await query.edit_message_text("✅ Ответ отправлен (симуляция).", reply_markup=None)
 
 # ====================== /START ======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await main_menu(update, context)
 
-# ====================== /GOAL (админ-панель) ======================
+# ====================== /GOAL ======================
 async def goal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_message.text.split()[1] != ADMIN_PASSWORD:
         await update.message.reply_text("Неверный пароль!")
@@ -197,12 +207,10 @@ async def goal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ====================== ЗАПУСК ======================
 def main():
     application = Application.builder().token(TOKEN).persistence(PicklePersistence(filepath="bot_data.pickle")).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("goal", goal_command))
     application.add_handler(CallbackQueryHandler(button_handler))
-
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
