@@ -1,5 +1,4 @@
 import asyncio
-import os
 from datetime import datetime, timedelta
 
 from telegram import (
@@ -11,14 +10,11 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
     CallbackQueryHandler, ContextTypes, PicklePersistence
 )
-import yookassa
 
 # ====================== КОНФИГ ======================
 TOKEN = "ТОКЕН_ОТ_BOTFATHER_СЮДА"
 CHANNEL_ID = -1001234567890  # ID канала https://t.me/koefii
 ADMIN_PASSWORD = "12345"
-YOOKASSA_SHOP_ID = "ТОТ_ШОП_ИЗ_KASSA"
-YOOKASSA_SECRET_KEY = "ТОТ_SECRET_ИЗ_KASSA"
 
 users = {}          # user_id -> данные
 matches = {}        # match_id -> данные
@@ -53,14 +49,8 @@ FLAGS = {
 
 REGIONS = list(FLAGS.keys())
 
-# ====================== ГЕНЕРАЦИЯ БАННЕРА БЕЗ PILLOW ======================
-# Генерируем через Telegram-Draw-Bot (самый надёжный способ для Botshost)
-def get_banner_url():
-    # Здесь будет URL от Telegram-Draw-Bot (сгенерировано один раз)
-    # Для теста используем публичный URL с баннером K + футбол + графики
-    return "https://ibb.co/6J6ZJ6Z"  # замени на свой загруженный баннер или я скину готовый
-
-BANNER_URL = "https://ibb.co/6J6ZJ6Z"  # временный URL (замени на реальный после первого запуска)
+# ====================== БАННЕР ======================
+BANNER_URL = "https://ibb.co/6J6ZJ6Z"  # временный URL. Замени на свой после первого запуска
 
 # ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
 def is_subscribed(update: Update) -> bool:
@@ -89,7 +79,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         photo=BANNER_URL,
         caption=(
-            "Доброго времени суток и имя пользователя!\n\n"
+            "Доброго время суток и имя пользователя!\n\n"
             "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, "
             "статистику по таймам, тренды и много другое). Анализирую и предоставляю наиболее вероятные исходы на событие."
         ),
@@ -168,8 +158,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text("Выбери тариф Premium:", reply_markup=InlineKeyboardMarkup(keyboard))
     elif data == "premium_month":
-        payment_url = "https://yookassa.ru"  # в реальности будет настоящий URL
-        await query.edit_message_text("Оплата Premium на месяц: 300 руб. Перейди по ссылке:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Оплатить", url=payment_url)]]))
+        await query.edit_message_text("💰 Оплата Premium на месяц: 300 руб.\n\nПосле оплаты напиши мне @код_поддержки", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_account")]]))
+    elif data == "premium_3month":
+        await query.edit_message_text("💰 Оплата Premium на 3 месяца: 800 руб.\n\nПосле оплаты напиши мне @код_поддержки", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_account")]]))
     elif data == "support":
         if unread_support:
             text = f"У тебя {len(unread_support)} непрочитанных сообщений.\n\nНажми на любое сообщение, чтобы прочитать:"
