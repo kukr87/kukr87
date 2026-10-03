@@ -51,7 +51,7 @@ REGIONS = list(FLAGS.keys())
 # ====================== БАННЕР ======================
 BANNER_URL = "https://ibb.co/6J6ZJ6Z"
 
-# ====================== МЕНЮ (без подписки) ======================
+# ====================== МЕНЮ ======================
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
@@ -164,4 +164,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if idx < len(unread_support):
             msg = unread_support.pop(idx)
             keyboard = [
-                [InlineKeyboardButton("Ответить
+                [InlineKeyboardButton("Ответить", callback_data="answer_support")],
+                [InlineKeyboardButton("Назад", callback_data="support")],
+            ]
+            await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif data == "answer_support":
+        await query.edit_message_text("✅ Ответ отправлен (симуляция).", reply_markup=None)
+
+# ====================== /START ======================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await main_menu(update, context)
+
+# ====================== /GOAL ======================
+async def goal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_message.text.split()[1] != ADMIN_PASSWORD:
+        await update.message.reply_text("Неверный пароль!")
+        return
+    keyboard = [[InlineKeyboardButton(region, callback_data=f"region_{region}")] for region in REGIONS]
+    await update.message.reply_text("Админ-панель:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+# ====================== ЗАПУСК ======================
+def main():
+    application = Application.builder().token(TOKEN).persistence(PicklePersistence(filepath="bot_data.pickle")).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("goal", goal_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
