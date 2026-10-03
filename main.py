@@ -12,7 +12,7 @@ from telegram.ext import (
 
 # ====================== КОНФИГ ======================
 TOKEN = "8660358537:AAGzxAODIeLfN3N5SmV0uL1cs5eUUhYosn8"
-CHANNEL_ID = -1002576724883
+CHANNEL_ID = -1001234567890  # больше не используется
 ADMIN_PASSWORD = "12345"
 
 users = {}          # user_id -> данные
@@ -51,28 +51,8 @@ REGIONS = list(FLAGS.keys())
 # ====================== БАННЕР ======================
 BANNER_URL = "https://ibb.co/6J6ZJ6Z"
 
-# ====================== ВСПОМОГАТЕЛЬНЫЕ ======================
-def is_subscribed(update: Update) -> bool:
-    try:
-        member = update.get_bot().get_chat_member(CHANNEL_ID, update.effective_user.id)
-        return member.status in ("member", "administrator", "creator")
-    except:
-        return False
-
-async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_subscribed(update):
-        keyboard = [[InlineKeyboardButton("Подписаться на канал", url="https://t.me/koefii")]]
-        await update.message.reply_text(
-            "❌ Ты не подписан на канал! Подпишись и нажми кнопку ниже.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        return True
-    return False
-
-# ====================== МЕНЮ ======================
+# ====================== МЕНЮ (без подписки) ======================
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if await check_subscription(update, context):
-        return
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=BANNER_URL,
@@ -184,33 +164,4 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if idx < len(unread_support):
             msg = unread_support.pop(idx)
             keyboard = [
-                [InlineKeyboardButton("Ответить", callback_data="answer_support")],
-                [InlineKeyboardButton("Назад", callback_data="support")],
-            ]
-            await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif data == "answer_support":
-        await query.edit_message_text("✅ Ответ отправлен (симуляция).", reply_markup=None)
-
-# ====================== /START ======================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await main_menu(update, context)
-
-# ====================== /GOAL ======================
-async def goal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_message.text.split()[1] != ADMIN_PASSWORD:
-        await update.message.reply_text("Неверный пароль!")
-        return
-    keyboard = [[InlineKeyboardButton(region, callback_data=f"region_{region}")] for region in REGIONS]
-    await update.message.reply_text("Админ-панель:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-# ====================== ЗАПУСК ======================
-def main():
-    application = Application.builder().token(TOKEN).persistence(PicklePersistence(filepath="bot_data.pickle")).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("goal", goal_command))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
+                [InlineKeyboardButton("Ответить
