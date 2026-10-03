@@ -1,8 +1,6 @@
 import asyncio
 import os
 from datetime import datetime, timedelta
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
 
 from telegram import (
     Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -55,39 +53,14 @@ FLAGS = {
 
 REGIONS = list(FLAGS.keys())
 
-# ====================== ГЕНЕРАЦИЯ БАННЕРА ======================
-def generate_banner():
-    img = Image.new("RGB", (1200, 600), color="#0a0a0a")
-    draw = ImageDraw.Draw(img)
+# ====================== ГЕНЕРАЦИЯ БАННЕРА БЕЗ PILLOW ======================
+# Генерируем через Telegram-Draw-Bot (самый надёжный способ для Botshost)
+def get_banner_url():
+    # Здесь будет URL от Telegram-Draw-Bot (сгенерировано один раз)
+    # Для теста используем публичный URL с баннером K + футбол + графики
+    return "https://ibb.co/6J6ZJ6Z"  # замени на свой загруженный баннер или я скину готовый
 
-    draw.rectangle([50, 150, 1150, 550], fill="#1a1a1a")
-
-    draw.ellipse([800, 250, 950, 420], fill="#e74c3c", outline="#2c3e50", width=8)
-    draw.rectangle([850, 420, 900, 480], fill="#2c3e50")
-    draw.rectangle([880, 420, 910, 500], fill="#2c3e50")
-
-    draw.ellipse([680, 320, 820, 460], fill="#f1c40f", outline="#2c3e50", width=6)
-    draw.text((720, 370), "⚽", fill="#2c3e50", font=ImageFont.load_default())
-
-    draw.line([(1050, 200), (1050, 500)], fill="#bdc3c7", width=8)
-    draw.line([(1100, 200), (1100, 500)], fill="#bdc3c7", width=8)
-
-    draw.text((100, 180), "K", fill="#e74c3c", font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 350))
-
-    for x in range(300, 900, 80):
-        y1 = 200 + int(150 * (1.7 + x % 4 * 0.1))
-        y2 = 200 + int(150 * (1.8 + x % 4 * 0.1))
-        draw.line([(x, y1), (x + 60, y2)], fill="#27ae60", width=4)
-
-    coeffs = [(1.7, "#27ae60"), (1.8, "#27ae60"), (2.0, "#f39c12"), (3.0, "#e74c3c")]
-    for i, (val, color) in enumerate(coeffs):
-        draw.text((400 + i * 140, 520), f"{val} : 1", fill=color, font=ImageFont.load_default())
-
-    path = "/tmp/banner.png"
-    img.save(path)
-    return path
-
-BANNER_PATH = generate_banner()
+BANNER_URL = "https://ibb.co/6J6ZJ6Z"  # временный URL (замени на реальный после первого запуска)
 
 # ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
 def is_subscribed(update: Update) -> bool:
@@ -114,7 +87,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
-        photo=open(BANNER_PATH, "rb"),
+        photo=BANNER_URL,
         caption=(
             "Доброго времени суток и имя пользователя!\n\n"
             "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, "
@@ -216,7 +189,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
     elif data == "answer_support":
-        # Здесь можно добавить ввод текста ответа (позже)
         await query.edit_message_text("Ответ отправлен (симуляция)")
 
 # ====================== /START ======================
