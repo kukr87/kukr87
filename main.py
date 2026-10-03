@@ -1,20 +1,17 @@
 import asyncio
-import json
 import os
 from datetime import datetime, timedelta
-import requests
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
 from telegram import (
     Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup,
-    ReplyKeyboardMarkup, KeyboardButton, ChatMemberUpdated, ChatMember
+    ChatMemberUpdated, ChatMember
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
-    CallbackQueryHandler, ContextTypes, ConversationHandler,
-    PicklePersistence
+    CallbackQueryHandler, ContextTypes, PicklePersistence
 )
 import yookassa
 
@@ -29,10 +26,36 @@ users = {}          # user_id -> данные
 matches = {}        # match_id -> данные
 unread_support = [] # список сообщений поддержки
 
-FLAGS = { ... }  # оставил твой список флагов (я его не удалил)
+FLAGS = {
+    "Испания": ("🇪🇸", "https://flagcdn.com/es.svg"),
+    "Италия": ("🇮🇹", "https://flagcdn.com/it.svg"),
+    "Португалия": ("🇵🇹", "https://flagcdn.com/pt.svg"),
+    "Швеция": ("🇸🇪", "https://flagcdn.com/se.svg"),
+    "Бразилия": ("🇧🇷", "https://flagcdn.com/br.svg"),
+    "Аргентина": ("🇦🇷", "https://flagcdn.com/ar.svg"),
+    "Англия": ("🏴󠁧󠁢󠁥󠁮󠁧󠁿", "https://flagcdn.com/gb.svg"),
+    "Беларусь": ("🇧🇾", "https://flagcdn.com/by.svg"),
+    "Бельгия": ("🇧🇪", "https://flagcdn.com/be.svg"),
+    "Россия": ("🇷🇺", "https://flagcdn.com/ru.svg"),
+    "Венгрия": ("🇭🇺", "https://flagcdn.com/hu.svg"),
+    "Германия": ("🇩🇪", "https://flagcdn.com/de.svg"),
+    "Греция": ("🇬🇷", "https://flagcdn.com/gr.svg"),
+    "Дания": ("🇩🇰", "https://flagcdn.com/dk.svg"),
+    "Ирландия": ("🇮🇪", "https://flagcdn.com/ie.svg"),
+    "Нидерланды": ("🇳🇱", "https://flagcdn.com/nl.svg"),
+    "Норвегия": ("🇳🇴", "https://flagcdn.com/no.svg"),
+    "Польша": ("🇵🇱", "https://flagcdn.com/pl.svg"),
+    "Турция": ("🇹🇷", "https://flagcdn.com/tr.svg"),
+    "Сербия": ("🇷🇸", "https://flagcdn.com/rs.svg"),
+    "Франция": ("🇫🇷", "https://flagcdn.com/fr.svg"),
+    "Хорватия": ("🇭🇷", "https://flagcdn.com/hr.svg"),
+    "Швейцария": ("🇨🇭", "https://flagcdn.com/ch.svg"),
+    "Мир": ("🌍", "https://flagcdn.com/xx.svg"),
+}
+
 REGIONS = list(FLAGS.keys())
 
-# ====================== ГЕНЕРАЦИЯ КАРТИНКИ (K + футбол) ======================
+# ====================== ГЕНЕРАЦИЯ БАННЕРА ======================
 def generate_banner():
     img = Image.new("RGB", (1200, 600), color="#0a0a0a")
     draw = ImageDraw.Draw(img)
@@ -66,11 +89,25 @@ def generate_banner():
 
 BANNER_PATH = generate_banner()
 
-# ====================== ОСТАЛЬНОЙ КОД (без изменений) ======================
-# (все функции: is_subscribed, check_subscription, main_menu, button_handler,
-#  show_account, show_matches_menu, show_tab, goal_command, create_payment и т.д.)
-# Я оставил весь остальной код прежним — просто добавил генерацию баннера в main_menu.
+# ====================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======================
+def is_subscribed(update: Update) -> bool:
+    try:
+        member = update.get_bot().get_chat_member(CHANNEL_ID, update.effective_user.id)
+        return member.status in ("member", "administrator", "creator")
+    except:
+        return False
 
+async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_subscribed(update):
+        keyboard = [[InlineKeyboardButton("Подписаться на канал", url="https://t.me/koefii")]]
+        await update.message.reply_text(
+            "❌ Ты не подписан на канал! Подпишись и нажми кнопку ниже.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return True
+    return False
+
+# ====================== МЕНЮ ======================
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_subscription(update, context):
         return
@@ -78,7 +115,11 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=open(BANNER_PATH, "rb"),
-        caption="Доброго времени суток, {0}!\n\nЯ собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, статистику по таймам, тренды и много другое). Анализирую и предоставляю наиболее вероятные исходы на событие.".format(update.effective_user.first_name),
+        caption=(
+            "Доброго времени суток и имя пользователя!\n\n"
+            "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, "
+            "статистику по таймам, тренды и много другое). Анализирую и предоставляю наиболее вероятные исходы на событие."
+        ),
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -91,11 +132,110 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Главное меню", reply_markup=reply)
 
+# ====================== ОБРАБОТКА КЛАВИШ ======================
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "menu_channel":
+        await query.edit_message_text("Канал:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти", url="https://t.me/koefii")]]))
+    elif data == "menu_chat":
+        await query.edit_message_text("Чат:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Перейти", url="https://t.me/koefchat")]]))
+    elif data == "menu_account":
+        user_id = query.from_user.id
+        user = users.get(user_id, {"name": query.from_user.first_name, "status": "Free", "premium_end": None})
+        text = f"👋 Добро пожаловать, {user['name']}!\nID: {user_id}\nСтатус: {user['status']}"
+        keyboard = []
+        if user["status"] == "Free":
+            keyboard.append([InlineKeyboardButton("Купить Premium", callback_data="buy_premium")])
+        keyboard.append([InlineKeyboardButton("Поддержка", callback_data="support")])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data == "menu_matches":
+        keyboard = [[InlineKeyboardButton(region, callback_data=f"region_{region}")] for region in REGIONS]
+        await query.edit_message_text("Выбери регион:", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data.startswith("region_"):
+        region = data.split("_")[1]
+        context.user_data["region"] = region
+        keyboard = [[InlineKeyboardButton(FLAGS[region][0], callback_data=f"league_{region}")] for region in REGIONS]
+        await query.edit_message_text(f"Выбери лигу для {region}:", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data.startswith("league_"):
+        region = data.split("_")[1]
+        context.user_data["league"] = region
+        await query.edit_message_text("Матчи добавлены (симуляция)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Назад", callback_data="menu_matches")]]))
+    elif data.startswith("match_"):
+        match_id = int(data.split("_")[1])
+        match = matches.get(match_id, {"name": "Матч", "forecast": "Прогноз...", "xg": "2.4", "injuries": "Нет травм", "stats": "Статистика..."})
+        keyboard = [
+            [InlineKeyboardButton("Прогноз", callback_data=f"tab_Прогноз_{match_id}")],
+            [InlineKeyboardButton("Аналитика", callback_data=f"tab_Аналитика_{match_id}")],
+            [InlineKeyboardButton("Статистика", callback_data=f"tab_Статистика_{match_id}")],
+            [InlineKeyboardButton("Таймы", callback_data=f"tab_Таймы_{match_id}")],
+            [InlineKeyboardButton("Травмы", callback_data=f"tab_Травмы_{match_id}")],
+        ]
+        await query.edit_message_text(f"Матч: {match['name']}\n\nВыбери вкладку:", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data.startswith("tab_"):
+        tab = data.split("_")[1]
+        match_id = int(data.split("_")[2])
+        match = matches.get(match_id, {})
+        spoilers = {
+            "Прогноз": f"**Прогноз:** {match.get('forecast', 'Прогноз...')}\n\n(скрытый текст)",
+            "Аналитика": f"**Аналитика:** xG = {match.get('xg', '2.4')}, тренды...",
+            "Статистика": f"**Статистика:** {match.get('stats', 'Статистика...')}",
+            "Таймы": "**Таймы:** По таймам...",
+            "Травмы": f"**Травмы:** {match.get('injuries', 'Нет травм')}",
+        }
+        await query.edit_message_text(spoilers.get(tab, "Данные недоступны"), parse_mode=ParseMode.MARKDOWN)
+    elif data == "buy_premium":
+        keyboard = [
+            [InlineKeyboardButton("Купить на месяц (300 руб)", callback_data="premium_month")],
+            [InlineKeyboardButton("Купить на 3 месяца", callback_data="premium_3month")],
+            [InlineKeyboardButton("Назад", callback_data="menu_account")],
+        ]
+        await query.edit_message_text("Выбери тариф Premium:", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data == "premium_month":
+        payment_url = "https://yookassa.ru"  # в реальности будет настоящий URL
+        await query.edit_message_text("Оплата Premium на месяц: 300 руб. Перейди по ссылке:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Оплатить", url=payment_url)]]))
+    elif data == "support":
+        if unread_support:
+            text = f"У тебя {len(unread_support)} непрочитанных сообщений.\n\nНажми на любое сообщение, чтобы прочитать:"
+            for i, msg in enumerate(unread_support):
+                text += f"\n\n{i+1}. {msg['user_name']} (ID: {msg['user_id']})"
+            keyboard = [[InlineKeyboardButton(f"Сообщение {i+1}", callback_data=f"support_msg_{i}")] for i in range(len(unread_support))]
+            keyboard.append([InlineKeyboardButton("Назад", callback_data="menu_account")])
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await query.edit_message_text("Непрочитанных сообщений нет.")
+    elif data.startswith("support_msg_"):
+        idx = int(data.split("_")[2])
+        msg = unread_support.pop(idx)
+        keyboard = [
+            [InlineKeyboardButton("Ответить", callback_data="answer_support")],
+            [InlineKeyboardButton("Назад", callback_data="support")],
+        ]
+        await query.edit_message_text(f"От {msg['user_name']} (ID: {msg['user_id']}):\n\n{msg['text']}", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif data == "answer_support":
+        # Здесь можно добавить ввод текста ответа (позже)
+        await query.edit_message_text("Ответ отправлен (симуляция)")
+
+# ====================== /START ======================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await main_menu(update, context)
+
+# ====================== /GOAL (админ-панель) ======================
+async def goal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_message.text.split()[1] != ADMIN_PASSWORD:
+        await update.message.reply_text("Неверный пароль!")
+        return
+    keyboard = [[InlineKeyboardButton(region, callback_data=f"region_{region}")] for region in REGIONS]
+    await update.message.reply_text("Админ-панель:", reply_markup=InlineKeyboardMarkup(keyboard))
+
 # ====================== ЗАПУСК ======================
 def main():
     application = Application.builder().token(TOKEN).persistence(PicklePersistence(filepath="bot_data.pickle")).build()
 
-    application.add_handler(CommandHandler("start", main_menu))
+    application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("goal", goal_command))
     application.add_handler(CallbackQueryHandler(button_handler))
 
