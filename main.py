@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import aiohttp
 from dotenv import load_dotenv
 import os
@@ -20,9 +20,8 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-admin_users = {ADMIN_ID}  # только этот ID может админку
+admin_users = {ADMIN_ID}
 
-# ================== ДАННЫЕ БОТА ==================
 matches_file = "matches.json"
 users_file = "users.json"
 support_file = "support.json"
@@ -41,16 +40,18 @@ matches = load_json(matches_file)
 users = load_json(users_file)
 support = load_json(support_file)
 
-if "mathes" not in matches:  # исправляем опечатку
+if "matches" not in matches:
+    matches["matches"] = {}
+
+if "mathes" not in matches:
     matches["mathes"] = {}
+
+tz = pytz.timezone("Europe/Moscow")
 
 user_matches = {u: 0 for u in users}
 if not users:
     users = {"default": {}}
 
-tz = pytz.timezone("Europe/Moscow")
-
-# ================== STATE ==================
 class AdminStates(StatesGroup):
     add_match_name = State()
     add_analitica = State()
@@ -58,39 +59,10 @@ class AdminStates(StatesGroup):
     add_time = State()
     add_injuries = State()
     add_forecast = State()
-    choose_country = State()
-    choose_league = State()
 
 class SupportStates(StatesGroup):
     get_message = State()
 
-# ================== ПОЛЬЗОВАТЕЛЬ ==================
-async def get_user_subscription(user_id: int) -> dict:
-    if str(user_id) not in users:
-        users[str(user_id)] = {"subscription": "Free", "end_date": "2026-01-01"}
-        save_json(users_file, users)
-    return users[str(user_id)]
-
-async def check_match_limit(user_id: int):
-    sub = await get_user_subscription(user_id)
-    if sub["subscription"] == "Premium":
-        return True
-    today = datetime.now(tz).date()
-    if "last_match_date" not in users[str(user_id)]:
-        users[str(user_id)]["last_match_date"] = str(today)
-        save_json(users_file, users)
-    last = datetime.strptime(users[str(user_id)]["last_match_date"], "%Y-%m-%d").date()
-    if last != today:
-        users[str(user_id)]["last_match_date"] = str(today)
-        users[str(user_id)]["daily_matches"] = 0
-        save_json(users_file, users)
-    if users[str(user_id)]["daily_matches"] >= 3:
-        return False
-    users[str(user_id)]["daily_matches"] += 1
-    save_json(users_file, users)
-    return True
-
-# ================== КЛАВИАТУРЫ ==================
 def main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📂 Аккаунт", callback_data="account")],
@@ -110,12 +82,12 @@ def account_keyboard(sub):
 
 def matches_keyboard():
     kb = []
-    for country, leagues in matches["mathes"].items():
+    for country, leagues in matches.get("mathes", {}).items():
         for league in leagues:
             kb.append([InlineKeyboardButton(text=f"🏳️ {country} — {league}", callback_data=f"league_{country}_{league}")])
     return InlineKeyboardMarkup(inline_keyboard=kb or [[InlineKeyboardButton(text="Матчей пока нет", callback_data="no_matches")]])
 
-def match_detail_keyboard(match):
+def match_detail_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Аналитика", callback_data="analitica"),
          InlineKeyboardButton(text="📈 Статистика", callback_data="stats")],
@@ -133,7 +105,34 @@ def preview_keyboard():
         [InlineKeyboardButton(text="Прогноз", callback_data="spoiler_forecast")]
     ])
 
-# ================== ХЕНДЛЕРЫ ==================
+async def get_user_subscription(user_id: int) -> dict:
+    uid = str(user_id)
+    if uid not in users:
+        users[uid] = {"subscription": "Free", "end_date": "2026-01-01"}
+        save_json(users_file, users)
+    return users[uid]
+
+async def check_match_limit(user_id: int):
+    sub = await get_user_subscription(user_id)
+    if sub["subscription"] == "Premium":
+        return True
+    today = datetime.now(tz).date()
+    uid = str(user_id)
+    if "last_match_date" not in users[uid]:
+        users[uid]["last_match_date"] = str(today)
+        users[uid]["daily_matches"] = 0
+        save_json(users_file, users)
+    last = datetime.strptime(users[uid]["last_match_date"], "%Y-%m-%d").date()
+    if last != today:
+        users[uid]["last_match_date"] = str(today)
+        users[uid]["daily_matches"] = 0
+        save_json(users_file, users)
+    if users[uid]["daily_matches"] >= 3:
+        return False
+    users[uid]["daily_matches"] += 1
+    save_json(users_file, users)
+    return True
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     sub = await get_user_subscription(message.from_user.id)
@@ -167,7 +166,7 @@ async def show_leagues(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("league_"))
 async def show_matches(callback: types.CallbackQuery):
     _, country, league = callback.data.split("_")
-    matches_list = matches["mathes"].get(country, {}).get(league, [])
+    matches_list = matches.get("mathes", {}).get(country, {}).get(league, [])
     if not matches_list:
         await callback.message.edit_text(f"В лиге {league} нет матчей пока.")
         return
@@ -175,34 +174,33 @@ async def show_matches(callback: types.CallbackQuery):
     for i, m in enumerate(matches_list, 1):
         text += f"{i}. {m}\n"
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{i+1}. {m}", callback_data=f"match_{i}") for i, m in enumerate(matches_list[:3])]  # показываем первые 3
+        [InlineKeyboardButton(text=f"{i+1}. {m}", callback_data=f"match_{i}") for i, m in enumerate(matches_list[:3])]
     ]))
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("match_"))
 async def show_match_details(callback: types.CallbackQuery):
-    idx = int(callback.data.split("_")[1])
-    # В реальной базе матчи хранятся по лигам и индексам, но для простоты берём первый матч (замени на реальный поиск)
-    matches_list = list(matches["mathes"].values())[0][0]  # пример
-    match = matches_list[idx-1] if idx-1 < len(matches_list) else "Матч не найден"
+    idx = int(callback.data.split("_")[1]) - 1
+    matches_list = list(matches.get("mathes", {}).values())[0][0] if matches.get("mathes", {}) else []
+    match = matches_list[idx] if idx < len(matches_list) else "Матч не найден"
     await callback.message.edit_text(
         f"⚽ <b>{match}</b>\n\n"
         "Выберите вкладку:",
-        reply_markup=match_detail_keyboard(match)
+        reply_markup=match_detail_keyboard()
     )
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("spoiler_"))
 async def show_spoiler(callback: types.CallbackQuery):
     tab = callback.data.split("_")[1]
-    text = {
-        "analitica": "🔬 Аналитика:\n... (текст матча)",
-        "stats": "📊 Статистика:\n...",
+    texts = {
+        "analitica": "🔬 Аналитика:\n... (полный текст матча из админки)",
+        "stats": "📊 Статистика:\n... (xG, результаты, таблица и т.д.)",
         "times": "⏱ Таймы:\n...",
         "injuries": "🚑 Травмы:\n...",
         "forecast": "🔮 Прогноз:\n..."
-    }.get(tab, "Нет данных")
-    await callback.message.answer(f"<tg-spoiler>{text}</tg-spoiler>", parse_mode="HTML")
+    }
+    await callback.message.answer(f"<tg-spoiler>{texts.get(tab, 'Нет данных')}</tg-spoiler>", parse_mode="HTML")
     await callback.answer()
 
 @dp.callback_query(F.data == "premium")
@@ -225,16 +223,17 @@ async def support(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(SupportStates.get_message)
 async def handle_support(message: types.Message, state: FSMContext):
-    support.setdefault(message.chat.id, []).append({
+    uid = str(message.chat.id)
+    support.setdefault(uid, []).append({
         "id": message.from_user.id,
         "name": message.from_user.full_name,
-        "text": message.text
+        "text": message.text,
+        "date": datetime.now(tz).strftime("%Y-%m-%d %H:%M")
     })
     save_json(support_file, support)
     await message.answer("Сообщение отправлено в техподдержку!")
     await state.clear()
 
-# ================== АДМИНКА ==================
 @dp.callback_query(F.data == "admin")
 async def admin_panel(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
@@ -256,13 +255,45 @@ async def add_match_start(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(AdminStates.add_match_name)
 async def add_match_name(message: types.Message, state: FSMContext):
     match_name = message.text.strip()
-    matches["matches"].setdefault("temp", {}).setdefault("name", match_name)
+    matches["matches"].setdefault("temp", {})["name"] = match_name
     save_json(matches_file, matches)
     await message.answer("Название сохранено. Теперь аналитика:")
     await state.set_state(AdminStates.add_analitica)
 
-# Продолжение добавления... (аналитика, статистика, таймы, травмы, прогноз)
-# Для полноты — аналогично, просто добавляешь по каждому состоянию.
+@dp.message(AdminStates.add_analitica)
+async def add_analitica(message: types.Message, state: FSMContext):
+    matches["matches"]["temp"]["analitica"] = message.text
+    save_json(matches_file, matches)
+    await message.answer("Аналитика сохранена. Статистика:")
+    await state.set_state(AdminStates.add_stats)
+
+@dp.message(AdminStates.add_stats)
+async def add_stats(message: types.Message, state: FSMContext):
+    matches["matches"]["temp"]["stats"] = message.text
+    save_json(matches_file, matches)
+    await message.answer("Статистика сохранена. Таймы:")
+    await state.set_state(AdminStates.add_time)
+
+@dp.message(AdminStates.add_time)
+async def add_time(message: types.Message, state: FSMContext):
+    matches["matches"]["temp"]["times"] = message.text
+    save_json(matches_file, matches)
+    await message.answer("Таймы сохранены. Травмы:")
+    await state.set_state(AdminStates.add_injuries)
+
+@dp.message(AdminStates.add_injuries)
+async def add_injuries(message: types.Message, state: FSMContext):
+    matches["matches"]["temp"]["injuries"] = message.text
+    save_json(matches_file, matches)
+    await message.answer("Травмы сохранены. Прогноз:")
+    await state.set_state(AdminStates.add_forecast)
+
+@dp.message(AdminStates.add_forecast)
+async def add_forecast(message: types.Message, state: FSMContext):
+    matches["matches"]["temp"]["forecast"] = message.text
+    save_json(matches_file, matches)
+    await message.answer("Прогноз сохранён!")
+    await state.clear()
 
 # ================== ЗАПУСК ==================
 async def main():
