@@ -34,11 +34,12 @@ tz = ZoneInfo("Europe/Moscow")
 # Premium:   безлимит, 300 ₽/мес
 
 TARIFFS = {
-    "Free":    {"limit": 3,   "price": 0,   "label": "🆓 Free"},
-    "Lite":    {"limit": 10,  "price": 100, "label": "📘 Lite"},
-    "Pro":     {"limit": 20,  "price": 200, "label": "⚡ Pro"},
-    "Premium": {"limit": -1,  "price": 300, "label": "⭐ Premium"},  # -1 = безлимит
+    "free": {"name": "🆓 Free", "matches_limit": 3, "price": 0, "duration_days": None},
+    "lite": {"name": "📘 Lite", "matches_limit": 10, "price": 100, "duration_days": 30},
+    "pro": {"name": "⚡ Pro", "matches_limit": 20, "price": 200, "duration_days": 30},
+    "premium": {"name": "⭐ Premium", "matches_limit": None, "price": 300, "duration_days": 30}
 }
+
 
 TARIFF_ORDER = ["Free", "Lite", "Pro", "Premium"]
 
