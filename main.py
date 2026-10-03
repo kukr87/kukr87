@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 
 # ====================== КОНФИГ ======================
-TOKEN = "ТОКЕН_ОТ_BOTFATHER_СЮДА"
+TOKEN = "8660358537:AAGzxAODIeLfN3N5SmV0uL1cs5eUUhYosn8"
 CHANNEL_ID = -1001234567890  # ID канала https://t.me/koefii
 ADMIN_PASSWORD = "12345"
 
