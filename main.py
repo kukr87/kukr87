@@ -1,7 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
-import pytz
+from zoneinfo import ZoneInfo
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -46,7 +46,7 @@ if "matches" not in matches:
 if "mathes" not in matches:
     matches["mathes"] = {}
 
-tz = pytz.timezone("Europe/Moscow")
+tz = ZoneInfo("Europe/Moscow")
 
 user_matches = {u: 0 for u in users}
 if not users:
