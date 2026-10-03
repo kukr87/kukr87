@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 
 # ====================== КОНФИГ ======================
-TOKEN = "8660358537:AAGzxAODIeLfN3N5SmV0uL1cs5eUUhYosn8"
+TOKEN = "8855640297:AAHtsj7N1d_lc6p2wNxZcZGGQxM5l0X01cI"
 CHANNEL_ID = -1001234567890  # больше не используется
 ADMIN_PASSWORD = "12345"
 
