@@ -9,10 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import aiohttp
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -295,7 +292,6 @@ async def add_forecast(message: types.Message, state: FSMContext):
     await message.answer("Прогноз сохранён!")
     await state.clear()
 
-# ================== ЗАПУСК ==================
 async def main():
     await dp.start_polling(bot)
 
