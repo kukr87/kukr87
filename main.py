@@ -423,7 +423,7 @@ async def buy_tariff(callback: types.CallbackQuery):
         f"💰 Цена: {t['price']} ₽ в месяц\n"
         f"⚽ Лимит: {'безлимит' if t['limit'] == -1 else f'{t[\"limit\"]} матчей в день'}\n\n"
         f"Для оплаты нажмите кнопку ниже, затем пришлите чек админу."
-    
+                                                           )
     pay_url = f"https://yoomoney.ru/quickpay/confirm.xml?receiver=your_kassa@mail.ru&sum={t['price']}&label=koefbot_{tariff_name}&formcomment=true"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"💳 Оплатить {t['price']} ₽", url=pay_url)],
