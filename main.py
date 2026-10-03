@@ -59,7 +59,7 @@ COUNTRY_FLAGS = {
     "Румыния": "🇷🇴",
 }
 
-BOT_USERNAME = "koef_bot"
+BOT_USERNAME = "koefiibot"
 
 SUPPORT_CATEGORIES = {
     "bug": "🐛 Баг / ошибка",
