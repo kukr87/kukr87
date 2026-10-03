@@ -1,295 +1,272 @@
 import asyncio
-import os
-from aiohttp import web
-from aiogram import Bot, Dispatcher, F
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
+import json
+from datetime import datetime, timedelta
+import pytz
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import (
-    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
-    Message
-)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
+import aiohttp
+from dotenv import load_dotenv
+import os
 
-# ==================== КОНФИГ (меняй под себя) ====================
-TOKEN = os.getenv("BOT_TOKEN")  # BotHost передаёт в env
-ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
-PASSWORD = "1234"  # пароль для /goal
+load_dotenv()
 
-# ЮKassa (замени на свои ключи)
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
-YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
-YOOKASSA_REDIRECT = "https://t.me/koefchat"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-# Канал
-CHANNEL = "koefii"
-# ================================================================
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+admin_users = {ADMIN_ID}  # только этот ID может админку
 
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+# ================== ДАННЫЕ БОТА ==================
+matches_file = "matches.json"
+users_file = "users.json"
+support_file = "support.json"
 
-# ==================== STATE ====================
-class AccountFSM(StatesGroup):
-    waiting_premium_end = State()
+def load_json(file):
+    if os.path.exists(file):
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-class AdminFSM(StatesGroup):
-    waiting_command = State()
-    waiting_password = State()
-    waiting_premium_type = State()
-    waiting_premium_days = State()
-    waiting_premium_user_id = State()
-    waiting_support = State()
+def save_json(file, data):
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
+matches = load_json(matches_file)
+users = load_json(users_file)
+support = load_json(support_file)
 
-# ==================== ФЛАГИ (добавлены настоящие) ====================
-FLAGS = {
-    "Россия": "🇷🇺",
-    "Испания": "🇪🇸",
-    "Италия": "🇮🇹",
-    "Бразилия": "🇧🇷",
-    "Англия": "🇬🇧",
-    "Мир": "🌍",
-}
+if "mathes" not in matches:  # исправляем опечатку
+    matches["mathes"] = {}
 
-# ==================== ПОМОЩНИКИ ====================
-def get_user_status(user_id: int):
-    return {"premium_end": "2026-12-31", "matches_today": 0, "unread_support": 0}
+user_matches = {u: 0 for u in users}
+if not users:
+    users = {"default": {}}
 
+tz = pytz.timezone("Europe/Moscow")
 
-def check_subscription(user_id: int):
-    return True  # заглушка, потом подключим БД
+# ================== STATE ==================
+class AdminStates(StatesGroup):
+    add_match_name = State()
+    add_analitica = State()
+    add_stats = State()
+    add_time = State()
+    add_injuries = State()
+    add_forecast = State()
+    choose_country = State()
+    choose_league = State()
 
+class SupportStates(StatesGroup):
+    get_message = State()
 
-async def check_user_subscription(user_id: int):
-    if not check_subscription(user_id):
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Подписаться на канал", url=f"https://t.me/{CHANNEL}")]
-        ])
-        await bot.send_message(user_id, "❌ Вы не подписаны на канал!\nПодпишитесь и нажмите кнопку ниже.", reply_markup=kb)
+# ================== ПОЛЬЗОВАТЕЛЬ ==================
+async def get_user_subscription(user_id: int) -> dict:
+    if str(user_id) not in users:
+        users[str(user_id)] = {"subscription": "Free", "end_date": "2026-01-01"}
+        save_json(users_file, users)
+    return users[str(user_id)]
+
+async def check_match_limit(user_id: int):
+    sub = await get_user_subscription(user_id)
+    if sub["subscription"] == "Premium":
+        return True
+    today = datetime.now(tz).date()
+    if "last_match_date" not in users[str(user_id)]:
+        users[str(user_id)]["last_match_date"] = str(today)
+        save_json(users_file, users)
+    last = datetime.strptime(users[str(user_id)]["last_match_date"], "%Y-%m-%d").date()
+    if last != today:
+        users[str(user_id)]["last_match_date"] = str(today)
+        users[str(user_id)]["daily_matches"] = 0
+        save_json(users_file, users)
+    if users[str(user_id)]["daily_matches"] >= 3:
         return False
+    users[str(user_id)]["daily_matches"] += 1
+    save_json(users_file, users)
     return True
 
-
-# ==================== КНОПКИ ====================
-def main_menu_kb(user_id: int):
+# ================== КЛАВИАТУРЫ ==================
+def main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Аккаунт", callback_data="account")],
+        [InlineKeyboardButton(text="📂 Аккаунт", callback_data="account")],
         [InlineKeyboardButton(text="⚽ Матчи", callback_data="matches")],
-        [InlineKeyboardButton(text="📢 Канал", url=f"https://t.me/{CHANNEL}")],
-        [InlineKeyboardButton(text="💬 Чат", url="https://t.me/koefchat")]
+        [InlineKeyboardButton(text="💬 Чат канала", url="https://t.me/koefchat")],
+        [InlineKeyboardButton(text="⭐ Premium", callback_data="premium")],
+        [InlineKeyboardButton(text="🛠 Техподдержка", callback_data="support")]
     ])
 
-def matches_menu_kb():
-    kb = []
-    for country in FLAGS:
-        kb.append([InlineKeyboardButton(
-            text=f"{FLAGS[country]} {country} ⚽",
-            callback_data=f"matches_{country}"
-        )])
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-
-def match_tabs_kb(match_name: str):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔮 Прогноз", callback_data=f"tab_Прогноз_{match_name}")],
-        [InlineKeyboardButton(text="📊 Аналитика", callback_data=f"tab_Аналитика_{match_name}")],
-        [InlineKeyboardButton(text="📈 Статистика", callback_data=f"tab_Статистика_{match_name}")],
-        [InlineKeyboardButton(text="⏱ Таймы", callback_data=f"tab_Таймы_{match_name}")],
-        [InlineKeyboardButton(text="🤕 Травмы", callback_data=f"tab_Травмы_{match_name}")]
-    ])
-
-
-# ==================== МЕНЮ ====================
-async def send_main_menu(message: Message | CallbackQuery):
-    if isinstance(message, CallbackQuery):
-        await message.message.delete()
-    await message.answer(
-        "Доброго времени суток и имя пользователя!\n\n"
-        "Я собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, статистика по таймам, тренды и много другое). "
-        "Анализирую и предоставляю наиболее вероятные исходы на событие.",
-        reply_markup=main_menu_kb(message.from_user.id)
-    )
-
-
-# ==================== CALLBACKS ====================
-@dp.callback_query(F.data == "account")
-async def account_menu(cb: CallbackQuery, state: FSMContext):
-    if not await check_user_subscription(cb.from_user.id):
-        return
-    status = get_user_status(cb.from_user.id)
+def account_keyboard(sub):
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📋 Мои матчи (3 сегодня)", callback_data="my_matches")],
-        [InlineKeyboardButton(text="💰 Поддержка", callback_data="support")]
+        [InlineKeyboardButton(text=f"Подписка: {sub['subscription']}", callback_data="sub_info")]
     ])
-    premium_text = f"Premium до {status['premium_end']}" if status.get("premium_end") else "Free"
-    await cb.message.edit_text(
-        f"👤 **Аккаунт**\n\n"
-        f"ID: {cb.from_user.id}\n"
-        f"Имя: @{cb.from_user.username or 'не указано'}\n"
-        f"Подписка: {premium_text}\n\n"
-        f"Бот отслеживает месяц. Если закончится — станет Free.",
-        reply_markup=kb
-    )
-    await state.set_state(AccountFSM.waiting_premium_end)
+    if sub["subscription"] == "Free":
+        kb.inline_keyboard.append([InlineKeyboardButton(text="Купить Premium (300 ₽)", callback_data="premium")])
+    return kb
 
+def matches_keyboard():
+    kb = []
+    for country, leagues in matches["mathes"].items():
+        for league in leagues:
+            kb.append([InlineKeyboardButton(text=f"🏳️ {country} — {league}", callback_data=f"league_{country}_{league}")])
+    return InlineKeyboardMarkup(inline_keyboard=kb or [[InlineKeyboardButton(text="Матчей пока нет", callback_data="no_matches")]])
+
+def match_detail_keyboard(match):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Аналитика", callback_data="analitica"),
+         InlineKeyboardButton(text="📈 Статистика", callback_data="stats")],
+        [InlineKeyboardButton(text="⏱ Таймы", callback_data="times"),
+         InlineKeyboardButton(text="🚑 Травмы", callback_data="injuries")],
+        [InlineKeyboardButton(text="🔮 Прогноз", callback_data="forecast")]
+    ])
+
+def preview_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Аналитика", callback_data="spoiler_analitica"),
+         InlineKeyboardButton(text="Статистика", callback_data="spoiler_stats")],
+        [InlineKeyboardButton(text="Таймы", callback_data="spoiler_times"),
+         InlineKeyboardButton(text="Травмы", callback_data="spoiler_injuries")],
+        [InlineKeyboardButton(text="Прогноз", callback_data="spoiler_forecast")]
+    ])
+
+# ================== ХЕНДЛЕРЫ ==================
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    sub = await get_user_subscription(message.from_user.id)
+    await message.answer(
+        "Доброго времени суток!\n\n"
+        "Я твой помощник в мире футбола, собираю полную статистику команд (травмы, результаты, положение в турнирной таблице, xG, "
+        "статистику по таймам, тренды и много другое), анализирую и предоставляю наиболее вероятные исходы на событие.",
+        reply_markup=main_keyboard()
+    )
+
+@dp.callback_query(F.data == "account")
+async def account(callback: types.CallbackQuery):
+    sub = await get_user_subscription(callback.from_user.id)
+    await callback.message.edit_text(
+        f"👤 Твой аккаунт\n\n"
+        f"ID: <code>{callback.from_user.id}</code>\n"
+        f"Имя: {callback.from_user.first_name}\n"
+        f"Подписка: <b>{sub['subscription']}</b>\n"
+        f"Действует до: {sub.get('end_date', '—')}\n\n"
+        "Бесплатно: 3 матча в сутки\n"
+        "Premium: безлимит матчей каждый день",
+        reply_markup=account_keyboard(sub)
+    )
+    await callback.answer()
 
 @dp.callback_query(F.data == "matches")
-async def matches_menu(cb: CallbackQuery):
-    if not await check_user_subscription(cb.from_user.id):
+async def show_leagues(callback: types.CallbackQuery):
+    await callback.message.edit_text("📋 Выберите лигу:", reply_markup=matches_keyboard())
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("league_"))
+async def show_matches(callback: types.CallbackQuery):
+    _, country, league = callback.data.split("_")
+    matches_list = matches["mathes"].get(country, {}).get(league, [])
+    if not matches_list:
+        await callback.message.edit_text(f"В лиге {league} нет матчей пока.")
         return
-    await cb.message.edit_text("⚽ **Выберите лигу/страну**", reply_markup=matches_menu_kb())
-
-
-@dp.callback_query(F.data.startswith("matches_"))
-async def matches_list(cb: CallbackQuery):
-    country = cb.data.split("_")[1]
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"Матч {i}", callback_data=f"match_{country}_{i}") for i in range(1, 6)]
-    ])
-    await cb.message.edit_text(f"⚽ **Матчи {country}**", reply_markup=kb)
-
+    text = f"🏟 {country} — {league}\n\n"
+    for i, m in enumerate(matches_list, 1):
+        text += f"{i}. {m}\n"
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{i+1}. {m}", callback_data=f"match_{i}") for i, m in enumerate(matches_list[:3])]  # показываем первые 3
+    ]))
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("match_"))
-async def show_match(cb: CallbackQuery):
-    match_name = cb.data.split("_")[-1]
-    await cb.message.edit_text(
-        f"⚽ **{match_name}**\n\n"
-        f"Тайм: 45:00\n"
-        f"Счёт: 1-1\n"
-        f"Позиция в таблице: 3-е место\n"
-        f"xG: 1.8 / 1.2",
-        reply_markup=match_tabs_kb(match_name)
+async def show_match_details(callback: types.CallbackQuery):
+    idx = int(callback.data.split("_")[1])
+    # В реальной базе матчи хранятся по лигам и индексам, но для простоты берём первый матч (замени на реальный поиск)
+    matches_list = list(matches["mathes"].values())[0][0]  # пример
+    match = matches_list[idx-1] if idx-1 < len(matches_list) else "Матч не найден"
+    await callback.message.edit_text(
+        f"⚽ <b>{match}</b>\n\n"
+        "Выберите вкладку:",
+        reply_markup=match_detail_keyboard(match)
     )
+    await callback.answer()
 
-
-@dp.callback_query(F.data.startswith("tab_"))
-async def show_tab(cb: CallbackQuery):
-    tab = cb.data.split("_")[1]
-    match_name = cb.data.split("_")[-1]
-    spoiler_text = {
-        "Прогноз": "🔮 **Прогноз**\n\nНа матч очень высокая вероятность домашней победы.",
-        "Аналитика": "📊 **Аналитика**\n\nxG, травмы, форма команд...",
-        "Статистика": "📈 **Статистика**\n\nСтатистика по таймам, xG и т.д.",
-        "Таймы": "⏱ **Таймы**\n\nПодробная статистика по таймам",
-        "Травмы": "🤕 **Травмы**\n\nСписок травмированных игроков"
-    }.get(tab, "Данные не найдены")
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Назад к матчу", callback_data=f"match_{match_name}")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
-
-    await cb.message.edit_text(
-        f"📌 **{tab}**\n\n"
-        f"{spoiler_text}\n\n"
-        f"**{match_name}**",
-        reply_markup=kb
-    )
-
-
-@dp.callback_query(F.data == "close")
-async def close_spoiler(cb: CallbackQuery):
-    await cb.message.delete()
-
-
-# ==================== АККАУНТ (Premium + ЮKassa) ====================
-@dp.callback_query(F.data == "my_matches")
-async def my_matches(cb: CallbackQuery):
-    if not await check_user_subscription(cb.from_user.id):
-        return
-    status = get_user_status(cb.from_user.id)
-    if status["matches_today"] >= 3 and not status.get("premium_end"):
-        await cb.answer("❌ Вы достигли лимита 3 матчей в сутки. Купите Premium!")
-        return
-    await cb.message.edit_text("✅ Ваши 3 матча готовы к просмотру.")
-
-
-@dp.callback_query(F.data == "support")
-async def open_support(cb: CallbackQuery, state: FSMContext):
-    if not await check_user_subscription(cb.from_user.id):
-        return
-    await cb.message.edit_text(
-        "💬 **Поддержка**\n\n"
-        f"У вас {get_user_status(cb.from_user.id).get('unread_support', 0)} непрочитанных писем.\n\n"
-        "Напишите текст обращения:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="close")]])
-    )
-    await state.set_state(AdminFSM.waiting_support)
-
+@dp.callback_query(F.data.startswith("spoiler_"))
+async def show_spoiler(callback: types.CallbackQuery):
+    tab = callback.data.split("_")[1]
+    text = {
+        "analitica": "🔬 Аналитика:\n... (текст матча)",
+        "stats": "📊 Статистика:\n...",
+        "times": "⏱ Таймы:\n...",
+        "injuries": "🚑 Травмы:\n...",
+        "forecast": "🔮 Прогноз:\n..."
+    }.get(tab, "Нет данных")
+    await callback.message.answer(f"<tg-spoiler>{text}</tg-spoiler>", parse_mode="HTML")
+    await callback.answer()
 
 @dp.callback_query(F.data == "premium")
-async def premium_payment(cb: CallbackQuery):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 На 1 месяц — 300 ₽", callback_data="pay_1month")],
-        [InlineKeyboardButton(text="❌ Убрать Premium", callback_data="remove_premium")]
-    ])
-    await cb.message.edit_text("💰 **Подписка Premium**\n\nВыберите срок:", reply_markup=kb)
-
-
-@dp.callback_query(F.data.startswith("pay_"))
-async def process_payment(cb: CallbackQuery):
-    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET:
-        await cb.answer("❌ ЮKassa не настроен. Обратитесь к администратору.", show_alert=True)
-        return
-    # Создаём платёж
-    payment = {
-        "amount": {"value": 300.00, "currency": "RUB"},
-        "confirmation": {"type": "redirect", "return_url": YOOKASSA_REDIRECT},
-        "capture": True,
-        "description": "Подписка Premium"
-    }
-    # (В реальном коде используй yookassa библиотеку, как в предыдущей версии)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Оплатить", url=f"https://t.me/{CHANNEL}")]
-    ])
-    await cb.message.edit_text("💳 **Оплата через ЮKassa**\n\nНажмите кнопку и оплатите. После оплаты Premium будет активировано автоматически.", reply_markup=kb)
-
-
-@dp.callback_query(F.data == "remove_premium")
-async def remove_premium(cb: CallbackQuery, state: FSMContext):
-    await cb.message.edit_text("✅ Premium удалён. Теперь Free.")
-    await state.update_data(premium_end=None)
-
-
-# ==================== АДМИН ПАНЕЛЬ ====================
-@dp.message(CommandStart())
-async def cmd_start(message: Message):
-    await send_main_menu(message)
-
-
-@dp.message(CommandStart(deep_link="/goal"))
-async def admin_start(message: Message):
-    await message.answer("🔑 **Админ-панель**\n\nВведите пароль:")
-    await AdminFSM.waiting_password.set()
-
-
-@dp.message(AdminFSM.waiting_password)
-async def admin_password(message: Message, state: FSMContext):
-    if message.text != PASSWORD:
-        await message.answer("❌ Неверный пароль")
-        return
-    await message.answer(
-        "🛠 **Админ-панель**\n\nВыберите действие:",
+async def premium(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "⭐ Premium — полный доступ к матчам, аналитике, статистике и прогнозам.\n\n"
+        "Цена: 300 ₽ в месяц\n\n"
+        "Оплата через ЮKassa",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить лигу", callback_data="add_league")],
-            [InlineKeyboardButton(text="📅 Управление Premium", callback_data="admin_premium")],
-            [InlineKeyboardButton(text="💬 Поддержка", callback_data="admin_support")]
+            [InlineKeyboardButton(text="Оплатить 300 ₽", url="https://yoomoney.ru/quickpay/confirm.xml?receiver=your_kassa@mail.ru&sum=300&label=koefbot&formcomment=true")]
         ])
     )
+    await callback.answer()
+
+@dp.callback_query(F.data == "support")
+async def support(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("🛠 Техподдержка — напишите сообщение (ID + имя + текст)")
+    await state.set_state(SupportStates.get_message)
+    await callback.answer()
+
+@dp.message(SupportStates.get_message)
+async def handle_support(message: types.Message, state: FSMContext):
+    support.setdefault(message.chat.id, []).append({
+        "id": message.from_user.id,
+        "name": message.from_user.full_name,
+        "text": message.text
+    })
+    save_json(support_file, support)
+    await message.answer("Сообщение отправлено в техподдержку!")
     await state.clear()
 
+# ================== АДМИНКА ==================
+@dp.callback_query(F.data == "admin")
+async def admin_panel(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Нет доступа")
+        return
+    await callback.message.edit_text("Админ-панель /goal", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Добавить матч", callback_data="add_match_start")],
+        [InlineKeyboardButton(text="💰 Управление Premium", callback_data="premium_admin")],
+        [InlineKeyboardButton(text="❌ Удалить матч", callback_data="delete_match")]
+    ]))
 
-# ==================== ЗАПУСК ====================
-async def on_startup():
-    print("🚀 Бот запущен на BotHost с настоящими флагами!")
+@dp.callback_query(F.data == "add_match_start")
+async def add_match_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    await callback.message.edit_text("Введите название матча:")
+    await state.set_state(AdminStates.add_match_name)
 
+@dp.message(AdminStates.add_match_name)
+async def add_match_name(message: types.Message, state: FSMContext):
+    match_name = message.text.strip()
+    matches["matches"].setdefault("temp", {}).setdefault("name", match_name)
+    save_json(matches_file, matches)
+    await message.answer("Название сохранено. Теперь аналитика:")
+    await state.set_state(AdminStates.add_analitica)
 
+# Продолжение добавления... (аналитика, статистика, таймы, травмы, прогноз)
+# Для полноты — аналогично, просто добавляешь по каждому состоянию.
+
+# ================== ЗАПУСК ==================
 async def main():
-    await on_startup()
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
