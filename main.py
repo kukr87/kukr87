@@ -12,7 +12,7 @@ from telegram.ext import (
 
 # ====================== КОНФИГ ======================
 TOKEN = "8660358537:AAGzxAODIeLfN3N5SmV0uL1cs5eUUhYosn8"
-CHANNEL_ID = -1001234567890
+CHANNEL_ID = -1002576724883
 ADMIN_PASSWORD = "12345"
 
 users = {}          # user_id -> данные
