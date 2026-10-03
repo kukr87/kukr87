@@ -34,7 +34,7 @@ FLAGS = {
     "Германия": ("🇩🇪", "https://flagcdn.com/de.svg"),
     "Греция": ("🇬🇷", "https://flagcdn.com/gr.svg"),
     "Дания": ("🇩🇰", "https://flagcdn.com/dk.svg"),
-    "Ирландия": ("🇮🇪", "https://flagcdn.com/ie.svg"),
+    "Ирландия": ("🇧🇾", "https://flagcdn.com/ie.svg"),
     "Нидерланды": ("🇳🇱", "https://flagcdn.com/nl.svg"),
     "Норвегия": ("🇳🇴", "https://flagcdn.com/no.svg"),
     "Польша": ("🇵🇱", "https://flagcdn.com/pl.svg"),
@@ -48,8 +48,8 @@ FLAGS = {
 
 REGIONS = list(FLAGS.keys())
 
-# ====================== БАННЕР (новый — из Telegram) ======================
-BANNER_URL = "https://telegra.ph/file/6J6ZJ6Z.jpg"  # загружен вручную в @BotFather / Telegram
+# ====================== БАННЕР (исправлено) ======================
+BANNER_URL = "https://telegra.ph/file/6J6ZJ6Z.jpg"
 
 # ====================== МЕНЮ ======================
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
