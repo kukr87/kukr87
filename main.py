@@ -34,7 +34,7 @@ FLAGS = {
     "Германия": ("🇩🇪", "https://flagcdn.com/de.svg"),
     "Греция": ("🇬🇷", "https://flagcdn.com/gr.svg"),
     "Дания": ("🇩🇰", "https://flagcdn.com/dk.svg"),
-    "Ирландия": ("🇧🇾", "https://flagcdn.com/ie.svg"),
+    "Ирландия": ("🇮🇪", "https://flagcdn.com/ie.svg"),
     "Нидерланды": ("🇳🇱", "https://flagcdn.com/nl.svg"),
     "Норвегия": ("🇳🇴", "https://flagcdn.com/no.svg"),
     "Польша": ("🇵🇱", "https://flagcdn.com/pl.svg"),
