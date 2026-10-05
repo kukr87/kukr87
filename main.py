@@ -631,8 +631,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     is_admin = str(uid) in admin_users
     await message.answer(
-        "{}, {}!\n\nЯ твой помощник в мире футбола — собираю статистику, "
-        "анализирую и предоставляю прогнозы.".format(greeting, message.from_user.first_name),
+        "{}, {}!\n\nЯ 🤖 твой помощник в мире футбола — собираю полную статистику, "
+        "анализирую и предоставляю более веротяные исходы на события.".format(greeting, message.from_user.first_name),
         reply_markup=main_keyboard(is_admin)
     )
 
