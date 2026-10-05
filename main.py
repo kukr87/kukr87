@@ -707,13 +707,13 @@ async def account(callback: types.CallbackQuery):
         end_text = "бессрочно"
 
     text = (
-        "👤 <b>Аккаунт</b>\n\n"
+        "🎭 <b>Аккаунт</b>\n\n"
         "🆔 ID: <code>{}</code>\n"
         "👤 Имя: {}\n"
         "💎 Тариф: {} {}\n"
         "📅 С нами с: {}\n"
-        "⚽ Матчей осталось сегодня: {}\n"
-        "🔥 Дней подряд: {}\n"
+        "⚽ Матчей доступно сегодня: {}\n"
+        "🔥 Дней подряд в проекте: {}\n"
         "🏆 Всего матчей в базе: {}\n"
         "👥 Всего пользователей: {}\n"
         "⭐ Premium-пользователей: {}\n"
@@ -779,7 +779,7 @@ async def show_favorites(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "matches")
 async def show_leagues(callback: types.CallbackQuery):
     matches = await db_fetchall("SELECT * FROM matches ORDER BY country, league")
-    await callback.message.edit_text("📋 Выберите группу (страна — лига):", reply_markup=matches_keyboard(matches))
+    await callback.message.edit_text("📋 Выберите (страна — лига):", reply_markup=matches_keyboard(matches))
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("group_"))
@@ -821,7 +821,7 @@ async def show_match_details(callback: types.CallbackQuery):
 
     allowed = await check_match_limit(callback.from_user.id, mid)
     if not allowed:
-        await callback.answer("❌ Лимит матчей исчерпан (3 в день). Купите Premium.", show_alert=True)
+        await callback.answer("⚠️ Лимит матчей исчерпан (3 в день). Купите ⭐ Premium.", show_alert=True)
         return
 
     _, name, country, league, mtime, mtext = row
@@ -829,7 +829,7 @@ async def show_match_details(callback: types.CallbackQuery):
     text = "⚽ <b>{}</b>\n".format(name)
     if mtime:
         text += "🕒 Время: {}\n".format(mtime)
-    text += "🌍 {} Страна: {}\n".format(flag, country)
+    text += "{} Страна: {}\n".format(flag, country)
     text += "🏆 Лига: {}\n\n".format(league)
     text += mtext or ""
 
@@ -875,7 +875,7 @@ def build_stats_text(stats: dict) -> str:
     lines.append("❌ Мимо: {}".format(stats["losses"]))
     lines.append("🎯 Винрейт: {:.1f}%".format(stats["winrate"]))
     lines.append("📈 ROI: {:+.1f}%".format(stats["roi"]))
-    lines.append("💰 Чистая прибыль: {:+.2f}".format(stats["profit"]))
+    lines.append("💹 Чистая прибыль: {:+.2f}".format(stats["profit"]))
     return "\n".join(lines)
 
 def build_results_text(results: list, page: int = 0, per_page: int = 7) -> str:
