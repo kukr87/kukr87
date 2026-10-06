@@ -517,7 +517,7 @@ def main_keyboard(is_admin: bool = False):
         [InlineKeyboardButton(text="🚆 Экспресс дня", callback_data="express")],
         [InlineKeyboardButton(text="💬 Чат канала", url="https://t.me/koefchat")],
         [InlineKeyboardButton(text="⭐ Premium", callback_data="premium")],
-        [InlineKeyboardButton(text="🛠 Техподдержка", callback_data="support")],
+        [InlineKeyboardButton(text="✉️ Техподдержка", callback_data="support")],
     ]
     if is_admin:
         kb.append([InlineKeyboardButton(text="🔧 Админ-панель", callback_data="admin_panel")])
@@ -917,8 +917,8 @@ async def build_express_view(user_id: int, page: int = 0) -> tuple:
                 flag = get_flag(pcountry or "")
                 line = "⚽ {}\n".format(pname)
                 line += "{} {} — {}\n".format(flag, pcountry or "", pleague or "")
-                line += "💡 Прогноз: {}\n".format(ppred or "")
-                line += "💰 Коэффициент: {}".format(pcoef or "")
+                line += "⚡ Прогноз: {}\n".format(ppred or "")
+                line += "🎯 Коэффициент: {}".format(pcoef or "")
                 lines.append(line)
                 try:
                     total_coef *= float(pcoef)
@@ -995,9 +995,8 @@ async def premium(callback: types.CallbackQuery):
             "⭐ <b>Premium — полный доступ</b>\n\n"
             "• Безлимитные матчи\n"
             "• Доступ к экспрессам\n"
-            "• Без ограничений\n\n"
             "Цена: {} ₽ в месяц\n\n"
-            "Нажмите кнопку ниже для оплаты.".format(PREMIUM_PRICE),
+            "Нажмите кнопку ниже 👇 для оплаты.".format(PREMIUM_PRICE),
             reply_markup=kb,
             parse_mode="HTML"
         )
@@ -1040,7 +1039,7 @@ async def sub_info(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "support")
 async def support_start(callback: types.CallbackQuery):
     await callback.message.edit_text(
-        "🛠 <b>Техподдержка</b>\n\nВыберите категорию обращения:",
+        "✉️ <b>Техподдержка</b>\n\nВыберите категорию обращения:",
         reply_markup=support_categories_keyboard(),
         parse_mode="HTML"
     )
@@ -1111,8 +1110,8 @@ def admin_panel_keyboard():
         [InlineKeyboardButton(text="➕ Добавить матч", callback_data="add_match_start")],
         [InlineKeyboardButton(text="🗑 Удалить матч / Очистить все", callback_data="delete_match_menu")],
         [InlineKeyboardButton(text="🚆 Экспресс дня", callback_data="express_admin")],
-        [InlineKeyboardButton(text="💰 Управление Premium", callback_data="premium_admin_menu")],
-        [InlineKeyboardButton(text="🛠 Сообщения поддержки", callback_data="support_admin_menu")],
+        [InlineKeyboardButton(text="⭐ Управление Premium", callback_data="premium_admin_menu")],
+        [InlineKeyboardButton(text="✉️ Сообщения поддержки", callback_data="support_admin_menu")],
         [InlineKeyboardButton(text="📦 Бэкап БД", callback_data="backup_db")],
         [InlineKeyboardButton(text="📋 Логи админа", callback_data="admin_logs")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
@@ -1255,11 +1254,11 @@ async def premium_admin_menu(callback: types.CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⭐ Выдать Premium по ID", callback_data="give_premium")],
         [InlineKeyboardButton(text="🚫 Снять Premium по ID", callback_data="remove_premium")],
-        [InlineKeyboardButton(text="⭐ Premium всем Free", callback_data="give_all_premium_menu")],
+        [InlineKeyboardButton(text="⭐ Выдать Premium всем ", callback_data="give_all_premium_menu")],
         [InlineKeyboardButton(text="🚫 Снять со всех Premium", callback_data="remove_all_premium")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
     ])
-    await callback.message.edit_text("💰 Управление Premium:", reply_markup=kb)
+    await callback.message.edit_text("⭐ Управление Premium:", reply_markup=kb)
     await callback.answer()
 
 @dp.callback_query(F.data == "give_premium")
@@ -1288,7 +1287,7 @@ async def do_give_premium(message: types.Message, state: FSMContext):
     await update_user_subscription(uid, "Premium", end_date)
     await log_admin_action(message.from_user.id, "give_premium", str(uid))
     try:
-        await bot.send_message(uid, "🎉 Вам выдан Premium на 30 дней!")
+        await bot.send_message(uid, "🎁 Вам выдан Premium на 30 дней!")
     except Exception:
         pass
     await message.answer("✅ Premium выдан пользователю {} на 30 дней.".format(uid), reply_markup=main_keyboard(True))
@@ -1362,7 +1361,7 @@ async def give_all_premium(callback: types.CallbackQuery):
         await update_user_subscription(uid, "Premium", end_date)
         count += 1
         try:
-            await bot.send_message(uid, "🎉 Вам выдан Premium ({})!".format(days_text))
+            await bot.send_message(uid, "🎁 Вам выдан Premium ({})!".format(days_text))
         except TelegramForbiddenError:
             await db_execute("UPDATE users SET status = 'blocked' WHERE user_id = ?", (uid,))
         except Exception:
@@ -1420,7 +1419,7 @@ async def support_admin_menu(callback: types.CallbackQuery):
         )])
     kb.append([InlineKeyboardButton(text="🗑 Очистить все", callback_data="clear_all_support")])
     kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")])
-    await callback.message.edit_text("🛠 Сообщения поддержки:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    await callback.message.edit_text("✉️ Сообщения поддержки:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("thread_"))
@@ -1513,8 +1512,8 @@ async def express_admin(callback: types.CallbackQuery):
             flag = get_flag(pcountry or "")
             line = "⚽ {}\n".format(pname)
             line += "{} {} — {}\n".format(flag, pcountry or "", pleague or "")
-            line += "💡 Прогноз: {}\n".format(ppred or "")
-            line += "💰 Коэффициент: {}".format(pcoef or "")
+            line += "⚡ Прогноз: {}\n".format(ppred or "")
+            line += "🎯 Коэффициент: {}".format(pcoef or "")
             lines.append(line)
             try:
                 total_coef *= float(pcoef)
@@ -1679,7 +1678,7 @@ async def result_enter_coefs(message: types.Message, state: FSMContext):
     text = (
         "🚆 <b>Экспресс дня</b>\n📅 {}\n\n"
         "🎲 Тип: {}\n"
-        "💰 Коэффициенты: {}\n"
+        "🎯 Коэффициенты: {}\n"
         "👑 Общий коэффициент: {:.2f}\n\n"
         "Подтвердите результат:".format(now_date, type_text, coefs_str, total_coef)
     )
@@ -1720,7 +1719,7 @@ async def result_confirm(callback: types.CallbackQuery, state: FSMContext):
         "✅ Результат сохранён!\n\n"
         "🚆 Экспресс дня\n"
         "🎲 {}\n"
-        "💰 Общий кф: {:.2f}\n"
+        "👑 Общий кф: {:.2f}\n"
         "📊 {}".format(type_text, total_coef, result_text),
         reply_markup=back_keyboard("express_admin")
     )
