@@ -754,7 +754,7 @@ async def account(callback: types.CallbackQuery):
     else:
         matches_left = max(0, 3 - viewed_today)
         sub_emoji = "🆓"
-        sub_text = "Free (бессрочно)"
+        sub_text = "Free"
         end_text = "бессрочно"
 
     # Считаем реальное количество дней в проекте
