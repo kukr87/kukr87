@@ -1392,7 +1392,7 @@ async def add_text(message: types.Message, state: FSMContext):
 # ====================== ПАРСЕР МАТЧЕЙ (BSD API — sports.bzzoiro.com) ======================
 
 PARSER_PER_PAGE = 10
-MATCH_TEXT_PER_PAGE = 7  # строк текста матча на одну страницу
+MATCH_TEXT_PER_PAGE = 8  # строк текста матча на одну страницу
 
 async def fetch_leagues_from_api() -> dict:
     """Получает список лиг с sports.bzzoiro.com и возвращает словарь {league_id: {name, country}}."""
